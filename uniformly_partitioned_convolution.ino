@@ -80,12 +80,12 @@ extern "C" uint32_t set_arm_clock(uint32_t frequency);
 #define LATENCY_TEST
 
 // define your frequency for the lowpass filter
-const double PROGMEM FHiCut = 22000.0; // for the (young) audiophile ;-)
-const double PROGMEM FLoCut = -FHiCut;
-const float32_t PROGMEM audio_gain = 6.5;
+const double FHiCut = 22000.0; // for the (young) audiophile ;-)
+const double FLoCut = -FHiCut;
+const float32_t audio_gain = 6.5;
 // define your sample rate
-const double PROGMEM SAMPLE_RATE = 48000;  
-const int PROGMEM partitionsize = 128; 
+const double SAMPLE_RATE = 48000;  
+const int partitionsize = 128; 
 
 // define the number of FIR taps of your filter
 //const int nc = 384;
@@ -96,8 +96,16 @@ const int PROGMEM partitionsize = 128;
 //const int nc = 2048; // number of taps for the FIR filter
 //const int nc = 4096; // number of taps for the FIR filter
 //const int nc = 8192; // number of taps for the FIR filter
-const int nc = 16384; // number of taps for the FIR filter
-//const int PROGMEM nc = 21632; // MAXIMUM number of taps for the FIR filter --> memory constraint, not processor speed
+//const int nc = 16384; // number of taps for the FIR filter
+const int nc = 28800; // MAXIMUM number of taps for the FIR filter --> memory constraint (99.5%), not processor speed (86%), watch out for stability problems due to low memory !
+
+// RAM1:
+// ITCM = FASTRUN:      31440   95.95%  of  32kb     (1328 Bytes free)
+// DTCM = Variables:    488128   99.31%  of  480kb     (3392 Bytes free)
+// RAM2:
+// OCRAM = DMAMEM:      521536   99.48%  of  512kb     (2752 Bytes free)
+// FLASH:               45200   2.16%  of  2048kb    (2051952 Bytes free)
+// processor load 85.76%
 
 // this is the shift necessary for k, figured out by Brian Millier, thanks a lot !
 int kshift = nc / partitionsize / 2 - 1;
@@ -114,21 +122,24 @@ int32_t sum;
 int idx_t = 0;
 int16_t *sp_L;
 int16_t *sp_R;
-uint8_t PROGMEM FIR_filter_window = 1;
-const uint32_t PROGMEM FFT_L = 256; 
+uint8_t FIR_filter_window = 1;
+const uint32_t FFT_L = 256; 
 uint32_t sample_counter = 0;
 uint32_t all_samples_counter = 0;
 uint8_t no_more_latency_test = 0;
 float32_t mean = 1;
 uint8_t first_block = 1; 
-const uint32_t PROGMEM FFT_length = FFT_L;
-const int PROGMEM nfor = nc / partitionsize; // number of partition blocks --> nfor = nc / partitionsize
-float DMAMEM cplxcoeffs[nc * 2]; // this holds the initial complex coefficients for the filter BEFORE partitioning
-float32_t  maskgen[FFT_L * 2];
+const uint32_t FFT_length = FFT_L;
+const int nfor = nc / partitionsize; // number of partition blocks --> nfor = nc / partitionsize
+
+const int nc_boundary = (int)(nc / 2);
+
+float32_t DMAMEM cplxcoeffs[nc_boundary]; // this holds the initial complex coefficients for the filter BEFORE partitioning
+float32_t maskgen[FFT_L * 2];
 float32_t fmask[nfor][FFT_L * 2]; // 
-float32_t  fftin[FFT_L * 2];
-float DMAMEM fftout[nfor][FFT_L * 2]; // 
-float32_t  accum[FFT_L * 2];
+float32_t fftin[FFT_L * 2];
+float32_t DMAMEM fftout[nfor][FFT_L * 2]; // 
+float32_t accum[FFT_L * 2];
 
 int buffidx = 0;
 int k = 0;
@@ -192,8 +203,12 @@ void setup() {
   /****************************************************************************************
      set filter bandwidth
   ****************************************************************************************/
+  for(unsigned i = 0; i < nc_boundary; i++)
+  {
+    cplxcoeffs[i] = 0.0;
+  }
   // this routine does all the magic of calculating the FIR coeffs
-  fir_bandpass (cplxcoeffs, nc, FLoCut, FHiCut, SAMPLE_RATE, 0, 1, 1.0);
+  fir_bandpass (nc, FLoCut, FHiCut, SAMPLE_RATE, 0, 1, 1.0);
 
   /****************************************************************************************
      init complex FFTs
@@ -208,22 +223,21 @@ void setup() {
   }
 
   /****************************************************************************************
-     Calculate the FFT of the FIR filter coefficients once to produce the FIR filter mask
+     initialise variables in DMAMEM
   ****************************************************************************************/
-    init_partitioned_filter_masks();
-
-  /****************************************************************************************
-     properly initialise variables in DMAMEM
-  ****************************************************************************************/
-
   for(unsigned jj = 0; jj < nfor; jj++)
   {
     for(unsigned ii = 0; ii < FFT_L * 2; ii++)
     {
-      fftout[jj][ii] = 0.1;
+      fftout[jj][ii] = 0.0;
     }
   }
-  
+
+  /****************************************************************************************
+     Calculate the FFT of the FIR filter coefficients once to produce the FIR filter mask
+  ****************************************************************************************/
+    init_partitioned_filter_masks();
+ 
   /****************************************************************************************
      display info on memory usage and convolution stuff
   ****************************************************************************************/
@@ -331,7 +345,7 @@ void loop() {
           this is taken from wdsp library by Warren Pratt firmin.c
           however: modified k --> originally was without kshift, which lead to high latency
        **********************************************************************************/
-      k = buffidx + kshift; // modified
+      k = buffidx;
 
       for(unsigned i = 0; i < partitionsize * 4; i++)
       {
@@ -342,17 +356,11 @@ void loop() {
       { 
           for(unsigned i = 0; i < 2 * partitionsize; i++)
           {
-/*              accum[2 * i + 0] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 0] -
+              accum[2 * i + 0] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 0] -
                                   fftout[(k + kshift) % nfor][2 * i + 1] * fmask[j][2 * i + 1];
               
               accum[2 * i + 1] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 1] +
                                   fftout[(k + kshift) % nfor][2 * i + 1] * fmask[j][2 * i + 0]; 
-*/
-              accum[2 * i + 0] += fftout[k][2 * i + 0] * fmask[j][2 * i + 0] -
-                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 1];
-              
-              accum[2 * i + 1] += fftout[k][2 * i + 0] * fmask[j][2 * i + 1] +
-                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 0]; 
           }
           k = k - 1;
           if(k < 0)
@@ -453,52 +461,62 @@ void loop() {
 
 void init_partitioned_filter_masks()
 {
-#ifndef PASSTHRU_AUDIO
-    for(unsigned j = 0; j < nfor;j++)
+///////////////////////////////////////////////////////////////
+    // first half of impulse response up to nfor/2
+    for(int j = 0; j < nfor / 2; j++)
     {
       // fill with zeroes
-      for (unsigned i = 0; i < partitionsize * 4; i++)
+      for (int i = 0; i < partitionsize * 4; i++)
       {
           maskgen[i] = 0.0;  
       }
       // take part of impulse response and fill into maskgen
-      for (unsigned i = 0; i < partitionsize * 2; i++)
-      { // this commented first option makes the unaliased output of the iFFT buffer appear in the left part 
-//          maskgen[i + partitionsize * 2] = cplxcoeffs[i + j * partitionsize * 2];  
+      for (int i = 0; i < partitionsize; i++)
+      { 
         // this makes the unaliased output appear in the right part of the iFFT buffer
-          maskgen[i] = cplxcoeffs[i + j * partitionsize * 2];  
+          maskgen[i * 2 + 0] = cplxcoeffs[i + j * partitionsize];
+          maskgen[i * 2 + 1] = 0.0;  
+//          Serial.print("cplxcoeffs[] "); Serial.println(i + j * partitionsize);
       }
       // perform complex FFT on maskgen
       arm_cfft_f32(maskS, maskgen, 0, 1);
       // fill into fmask array
-      for (unsigned i = 0; i < partitionsize * 4; i++)
+      for (int i = 0; i < partitionsize * 4; i++)
       {
           fmask[j][i] = maskgen[i];  
       }    
     }
-    
-#else
-// passthru
-    
-    for(unsigned j = 0; j < nfor;j++)
+
+    // second half of impulse response (symmetric copy of the first half)
+    for(int j = 0; j < nfor / 2; j++)
     {
       // fill with zeroes
-      for (unsigned i = 0; i < partitionsize * 4; i++)
+      for (int i = 0; i < partitionsize * 4; i++)
       {
           maskgen[i] = 0.0;  
       }
-      if(j==0) maskgen[0] = 1.0; 
-      arm_cfft_f32(maskS, maskgen, 0, 1);      
-      for (unsigned i = 0; i < partitionsize * 4; i++)
+      // take part of impulse response and fill into maskgen
+      for (int i = 0; i < partitionsize; i++)
+      { 
+        // this makes the unaliased output appear in the right part of the iFFT buffer
+        // we have to take the same symmetric coeffs, but now start from behind
+          maskgen[i * 2 + 0] = cplxcoeffs[((int)(nc / 2) - 1) - i - (j * partitionsize)];
+          maskgen[i * 2 + 1] = 0.0;  
+//          Serial.print("cplxcoeffs[] "); Serial.println(((int)(nc / 2) - 1) - i - (j * partitionsize));
+      }
+      // perform complex FFT on maskgen
+      arm_cfft_f32(maskS, maskgen, 0, 1);
+      // fill into fmask array
+      for (int i = 0; i < partitionsize * 4; i++)
       {
-          fmask[j][i] = maskgen[i];  
-      } 
+        // important to add nfor/2 to index !
+          fmask[j + nfor / 2][i] = maskgen[i];  
+      }    
     }
-#endif
 }
 
 // taken from wdsp library by Warren Pratt
-void fir_bandpass (float * impulse, int N, double f_low, double f_high, double samplerate, int wintype, int rtype, double scale)
+void fir_bandpass (int N, double f_low, double f_high, double samplerate, int wintype, int rtype, double scale)
 {
   double ft = (f_high - f_low) / (2.0 * samplerate);
   double ft_rad = TWO_PI * ft;
@@ -510,19 +528,6 @@ void fir_bandpass (float * impulse, int N, double f_low, double f_high, double s
   double posi, posj;
   double sinc, window, coef;
 
-  if (N & 1)
-  {
-    switch (rtype)
-    {
-    case 0:
-      impulse[N >> 1] = scale * 2.0 * ft;
-      break;
-    case 1:
-      impulse[N - 1] = scale * 2.0 * ft;
-      impulse[  N  ] = 0.0;
-      break;
-    }
-  }
   for (i = (N + 1) / 2, j = N / 2 - 1; i < N; i++, j--)
   {
     posi = (double)i - m;
@@ -551,24 +556,9 @@ void fir_bandpass (float * impulse, int N, double f_low, double f_high, double s
     coef = scale * sinc * window;
     switch (rtype)
     {
-    case 0:
-      impulse[i] = + coef * cos (posi * w_osc);
-      impulse[j] = + coef * cos (posj * w_osc);
-//      impulse[j] = - coef * cos (posj * w_osc);
-      break;
     case 1:
-/*      impulse[2 * i + 0] = + coef * cos (posi * w_osc);
-      impulse[2 * i + 1] = - coef * sin (posi * w_osc);
-      impulse[2 * j + 0] = + coef * cos (posj * w_osc);
-      impulse[2 * j + 1] = - coef * sin (posj * w_osc);
-*/
-      // this is a perfectly symmetric impulse response, so we could save half of the memory
-      // and half of it is zero, so another 50% saving possible
-      impulse[2 * i + 0] = + coef * cos (posi * w_osc);
-      impulse[2 * i + 1] = 0; 
-      impulse[2 * j + 0] = + coef * cos (posj * w_osc);
-      impulse[2 * j + 1] = 0; 
-
+      cplxcoeffs[j] = + coef * cos (posj * w_osc);
+      Serial.print(j); Serial.print("  =  "); Serial.println(cplxcoeffs[j] * 1000000);
       break;
     }
   }
