@@ -3,6 +3,8 @@
  * 
  * Real Time PARTITIONED BLOCK CONVOLUTION FILTERING (STEREO)
  * 
+ * thanks a lot to Brian Millier and Warren Pratt for your help!
+ * 
  * using a guitar cabinet impulse response with up to about 20000 coefficients per channel
  * 
  * uses Teensy 4.0 and external ADC / DAC connected on perf board with ground plane
