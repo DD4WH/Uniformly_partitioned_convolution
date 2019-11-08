@@ -80,7 +80,7 @@ extern "C" uint32_t set_arm_clock(uint32_t frequency);
 #define LATENCY_TEST
 
 // define your frequency for the lowpass filter
-const double FHiCut = 22000.0; // for the (young) audiophile ;-)
+const double FHiCut = 2500.0; // for the (young) audiophile ;-)
 const double FLoCut = -FHiCut;
 const float32_t audio_gain = 6.5;
 // define your sample rate
@@ -175,7 +175,6 @@ AudioConnection          patchCord4(Q_out_R, 0, mixright, 0);
 AudioConnection          patchCord9(mixleft, 0,  i2s_out, 1);
 AudioConnection          patchCord10(mixright, 0, i2s_out, 0);
 AudioControlSGTL5000     audio_codec;
-
 
 void setup() {
   Serial.begin(115200);
@@ -356,11 +355,17 @@ void loop() {
       { 
           for(unsigned i = 0; i < 2 * partitionsize; i++)
           {
-              accum[2 * i + 0] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 0] -
+/*              accum[2 * i + 0] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 0] -
                                   fftout[(k + kshift) % nfor][2 * i + 1] * fmask[j][2 * i + 1];
               
               accum[2 * i + 1] += fftout[(k + kshift) % nfor][2 * i + 0] * fmask[j][2 * i + 1] +
                                   fftout[(k + kshift) % nfor][2 * i + 1] * fmask[j][2 * i + 0]; 
+*/
+              accum[2 * i + 0] += fftout[k][2 * i + 0] * fmask[j][2 * i + 0] -
+                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 1];
+              
+              accum[2 * i + 1] += fftout[k][2 * i + 0] * fmask[j][2 * i + 1] +
+                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 0]; 
           }
           k = k - 1;
           if(k < 0)
