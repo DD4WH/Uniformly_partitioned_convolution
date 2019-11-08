@@ -1,3 +1,5 @@
+// Telos desIRe (400ms impulse response)
+
 const float32_t guitar_cabinet_impulse [17920 * 2] = 
 {0.05864,
 0,
