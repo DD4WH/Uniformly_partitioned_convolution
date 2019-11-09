@@ -1,5 +1,5 @@
 /*
- * (c) DD4WH 08/11/2019
+ * (c) DD4WH 09/11/2019
  * 
  * Real Time PARTITIONED BLOCK CONVOLUTION FILTERING (STEREO)
  * 
@@ -57,9 +57,12 @@
 //#define IR1  // 512 taps // MG impulse response from bmillier github @44.1ksps
 //#define IR2  // 4096 taps // Marshall 1960A impulse response from cabIR.eu @44.1ksps
 //#define IR3  // 8192 taps // Marshall 1971 impulse response from cabIR.eu @44.1ksps
-#define IR4    // 17920 taps // Telos impulse response 400ms @44.1ksps
-
-const float32_t PROGMEM audio_gain = 1.5;
+//#define IR4    // 17920 taps // Telos impulse response 400ms @44.1ksps
+//#define LPMINPHASE512 // 512 taps minimum phase 2.7kHz lowpass filter
+//#define LPMINPHASE1024 // 1024 taps minimum phase 2.7kHz lowpass filter
+#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
+//#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
+const float32_t PROGMEM audio_gain = 6.5; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(IR1)
@@ -71,6 +74,18 @@ const int nc = 4096; // number of taps for the FIR filter
 #elif defined(IR3)
 #include "impulse_response_3.h"
 const int nc = 8192; // number of taps for the FIR filter
+#elif defined(LPMINPHASE512)
+#include "lp_minphase_512.h"
+const int nc = 512;
+#elif defined(LPMINPHASE1024)
+#include "lp_minphase_1024.h"
+const int nc = 1024;
+#elif defined(LPMINPHASE2048PASSTHRU)
+#include "lp_minphase_2048passthru.h"
+const int nc = 2048;
+#elif defined(LPMINPHASE4096)
+#include "lp_minphase_4096.h"
+const int nc = 4096;
 #else
 #include "impulse_response_4.h"
 const int nc = 17920; // number of taps for the FIR filter
