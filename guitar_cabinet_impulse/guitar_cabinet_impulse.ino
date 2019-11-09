@@ -60,8 +60,8 @@
 //#define IR4    // 17920 taps // Telos impulse response 400ms @44.1ksps
 //#define LPMINPHASE512 // 512 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE1024 // 1024 taps minimum phase 2.7kHz lowpass filter
-#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
-//#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
+//#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
+#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
 const float32_t PROGMEM audio_gain = 6.5; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
