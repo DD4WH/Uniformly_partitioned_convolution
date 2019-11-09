@@ -55,13 +55,14 @@
 // Choose only one of these impulse responses !
 
 //#define IR1  // 512 taps // MG impulse response from bmillier github @44.1ksps
-//#define IR2  // 4096 taps // Marshall 1960A impulse response from cabIR.eu @44.1ksps
-//#define IR3  // 8192 taps // Marshall 1971 impulse response from cabIR.eu @44.1ksps
-//#define IR4    // 17920 taps // Telos impulse response 400ms @44.1ksps
+//#define IR2  // 4096 taps // impulse response @44.1ksps
+//#define IR3  // 7552 taps // impulse response @44.1ksps
+//#define IR4    // 17920 taps // impulse response 400ms @44.1ksps
+#define IR5    // 21632 taps // impulse response 490ms @44.1ksps
 //#define LPMINPHASE512 // 512 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE1024 // 1024 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
-#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
+//#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
 const float32_t PROGMEM audio_gain = 6.5; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,7 +74,10 @@ const int nc = 512; // number of taps for the FIR filter
 const int nc = 4096; // number of taps for the FIR filter
 #elif defined(IR3)
 #include "impulse_response_3.h"
-const int nc = 8192; // number of taps for the FIR filter
+const int nc = 7552; // number of taps for the FIR filter
+#elif defined(IR5)
+#include "impulse_response_5.h"
+const int nc = 21632; // number of taps for the FIR filter
 #elif defined(LPMINPHASE512)
 #include "lp_minphase_512.h"
 const int nc = 512;
@@ -466,12 +470,27 @@ void init_partitioned_filter_masks()
           maskgen[i] = 0.0;  
       }
       // take part of impulse response and fill into maskgen
+      for (unsigned i = 0; i < partitionsize; i++)
+      {   
+        // THIS IS FOR REAL IMPULSE RESPONSES OR FIR COEFFICIENTS
+        // FOR COMPLEX USE THE PART BELOW
+          // the position of the impulse response coeffs (right or left aligned)
+          // determines the useable part of the audio in the overlap-and-save (left or right part of the iFFT buffer)
+          maskgen[i * 2 + partitionsize * 2] = guitar_cabinet_impulse[i + j * partitionsize];  
+      }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////      
+/*    
+ *     THIS COMMENTED OUT PART IS FOR COMPLEX FILTER COEFFS
+ *     
+ *     // take part of impulse response and fill into maskgen
       for (unsigned i = 0; i < partitionsize * 2; i++)
       {
           // the position of the impulse response coeffs (right or left aligned)
           // determines the useable part of the audio in the overlap-and-save (left or right part of the iFFT buffer)
           maskgen[i + partitionsize * 2] = guitar_cabinet_impulse[i + j * partitionsize * 2];  
       }
+      */
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////      
       // perform complex FFT on maskgen
       arm_cfft_f32(maskS, maskgen, 0, 1);
       // fill into fmask array
