@@ -58,12 +58,16 @@
 //#define IR2  // 4096 taps // impulse response @44.1ksps
 //#define IR3  // 7552 taps // impulse response @44.1ksps
 //#define IR4    // 17920 taps // impulse response 400ms @44.1ksps
-#define IR5    // 21632 taps // impulse response 490ms @44.1ksps
+//#define IR5    // 21632 taps // impulse response 490ms @44.1ksps
+//#define IR6 // 5760 taps, 18.72% load vs. 15.00%
+#define IR7 // 22016 taps, 50.62% load, 93.48% RAM1, 32064 bytes free
+//#define IR8 // 25552 taps, too much !
+// about 25000 taps is MAXIMUM --> about 0.5 seconds
 //#define LPMINPHASE512 // 512 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE1024 // 1024 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
 //#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
-const float32_t PROGMEM audio_gain = 6.5; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
+const float32_t PROGMEM audio_gain = 1.0; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(IR1)
@@ -78,6 +82,15 @@ const int nc = 7552; // number of taps for the FIR filter
 #elif defined(IR5)
 #include "impulse_response_5.h"
 const int nc = 21632; // number of taps for the FIR filter
+#elif defined(IR6)
+#include "impulse_response_6.h"
+const int nc = 5760; // number of taps for the FIR filter, 
+#elif defined(IR7)
+#include "impulse_response_7.h"
+const int nc = 22016; // number of taps for the FIR filter, 
+#elif defined(IR8)
+#include "impulse_response_8.h"
+const int nc = 25552; // number of taps for the FIR filter, 
 #elif defined(LPMINPHASE512)
 #include "lp_minphase_512.h"
 const int nc = 512;
@@ -102,12 +115,6 @@ const double PROGMEM FHiCut = 2500.0;
 const double PROGMEM FLoCut = -FHiCut;
 // define your sample rate
 const double PROGMEM SAMPLE_RATE = 44100;  
-// define the number of FIR taps of your filter
-//const int nc = 512; // number of taps for the FIR filter
-//const int nc = 4096; // number of taps for the FIR filter
-//const int nc = 8192; // number of taps for the FIR filter
-//const int nc = 17920; // number of taps for the FIR filter
-//const int PROGMEM nc = 21632; // MAXIMUM number of taps for the FIR filter
 // the latency of the filter is meant to be the same regardless of the number of taps for the filter
 // partition size of 128 translates to a latency of 128/sample rate, ie. to 2.9msec with 44.1ksps
 
@@ -341,7 +348,7 @@ void loop() {
           Complex multiplication with filter mask (precalculated coefficients subjected to an FFT)
           this is taken from wdsp library by Warren Pratt firmin.c
        **********************************************************************************/
-      k = (buffidx + 0)%nfor;
+      k = buffidx;
 
       for(unsigned i = 0; i < partitionsize * 4; i++)
       {
@@ -350,13 +357,25 @@ void loop() {
       
       for(unsigned j = 0; j < nfor; j++)
       { 
-          for(unsigned i = 0; i < 2 * partitionsize; i++)
+          for(unsigned i = 0; i < 2 * partitionsize; i= i + 4 )
           {
-              accum[2 * i + 0] += fftout[k][2 * i + 0] * fmask[j][2 * i + 0] -
-                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 1];
-              
-              accum[2 * i + 1] += fftout[k][2 * i + 0] * fmask[j][2 * i + 1] +
-                                  fftout[k][2 * i + 1] * fmask[j][2 * i + 0]; 
+            // doing 8 of these complex multiplies inside one loop saves a HUGE LOT of processor cycles
+              accum[2 * i + 0] +=  fftout[k][2 * i + 0] * fmask[j][2 * i + 0] -
+                                   fftout[k][2 * i + 1] * fmask[j][2 * i + 1];
+              accum[2 * i + 1] +=  fftout[k][2 * i + 0] * fmask[j][2 * i + 1] +
+                                   fftout[k][2 * i + 1] * fmask[j][2 * i + 0]; 
+              accum[2 * i + 2] +=  fftout[k][2 * i + 2] * fmask[j][2 * i + 2] -
+                                   fftout[k][2 * i + 3] * fmask[j][2 * i + 3];
+              accum[2 * i + 3] +=  fftout[k][2 * i + 2] * fmask[j][2 * i + 3] +
+                                   fftout[k][2 * i + 3] * fmask[j][2 * i + 2]; 
+              accum[2 * i + 4] +=  fftout[k][2 * i + 4] * fmask[j][2 * i + 4] -
+                                   fftout[k][2 * i + 5] * fmask[j][2 * i + 5];
+              accum[2 * i + 5] +=  fftout[k][2 * i + 4] * fmask[j][2 * i + 5] +
+                                   fftout[k][2 * i + 5] * fmask[j][2 * i + 4]; 
+              accum[2 * i + 6] +=  fftout[k][2 * i + 6] * fmask[j][2 * i + 6] -
+                                   fftout[k][2 * i + 7] * fmask[j][2 * i + 7];
+              accum[2 * i + 7] +=  fftout[k][2 * i + 6] * fmask[j][2 * i + 7] +
+                                   fftout[k][2 * i + 7] * fmask[j][2 * i + 6]; 
           }
           k = k - 1;
           if(k < 0)
