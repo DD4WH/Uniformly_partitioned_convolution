@@ -8,7 +8,7 @@
  * using a guitar cabinet impulse response with up to about 20000 coefficients per channel
  * 
  * uses Teensy 4.0 and external ADC / DAC connected on perf board with ground plane
- * should be able to run with the Teensy audio shield rev D (although not tested)
+ * also runs with the Teensy audio shield rev D (tested)
  * 
  *  PCM5102A DAC module
     VCC = Vin
@@ -67,7 +67,7 @@
 //#define LPMINPHASE1024 // 1024 taps minimum phase 2.7kHz lowpass filter
 //#define LPMINPHASE2048PASSTHRU // 2048 taps minimum phase 19.0kHz lowpass filter
 //#define LPMINPHASE4096 // 4096 taps minimum phase 2.7kHz lowpass filter
-const float32_t PROGMEM audio_gain = 1.0; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
+const float32_t PROGMEM audio_gain = 0.25; // has to be adjusted from 1.0 to 10.0 depending on the filter gain / impulse resonse gain
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(IR1)
@@ -110,7 +110,7 @@ const int nc = 17920; // number of taps for the FIR filter
 
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
 
-#define LATENCY_TEST
+//#define LATENCY_TEST
 const double PROGMEM FHiCut = 2500.0;
 const double PROGMEM FLoCut = -FHiCut;
 // define your sample rate
@@ -181,7 +181,7 @@ AudioConnection          patchCord3(Q_out_L, 0, mixleft, 0);
 AudioConnection          patchCord4(Q_out_R, 0, mixright, 0);
 AudioConnection          patchCord9(mixleft, 0,  i2s_out, 1);
 AudioConnection          patchCord10(mixright, 0, i2s_out, 0);
-
+AudioControlSGTL5000     codec;
 
 void setup() {
   Serial.begin(115200);
@@ -189,6 +189,12 @@ void setup() {
 
   AudioMemory(10); 
   delay(100);
+
+  // Enable the audio shield, select input, and enable output
+  codec.enable();
+  codec.adcHighPassFilterDisable(); // 
+  codec.inputSelect(AUDIO_INPUT_LINEIN); // AUDIO_INPUT_MIC
+  codec.volume(0.6);
 
   set_arm_clock(600000000);
 
